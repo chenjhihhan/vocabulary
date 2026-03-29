@@ -194,20 +194,23 @@ else:
             for idx, item in grouped_vocab[group]:
                 display_type = get_display_type(item.get("type", ""))
 
-                text_col, edit_col, delete_col = st.columns([8, 1, 1], gap="small")
-
-                with text_col:
+                row_col, action_col = st.columns([7.5, 2.5], gap="small")
+                
+                with row_col:
                     st.markdown(
                         f"<div class='word-text'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
                         unsafe_allow_html=True
                     )
-
-                with edit_col:
-                    if st.button("✏️", key=f"edit_{idx}"):
-                        edit_vocab_dialog(idx)
-
-                with delete_col:
-                    if st.button("🗑️", key=f"delete_{idx}"):
-                        st.session_state.vocab.pop(idx)
-                        save_data(st.session_state.vocab)
-                        st.rerun()
+                
+                with action_col:
+                    edit_col, delete_col = st.columns(2, gap="small")
+                
+                    with edit_col:
+                        if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
+                            edit_vocab_dialog(idx)
+                
+                    with delete_col:
+                        if st.button("🗑️", key=f"delete_{idx}", use_container_width=True):
+                            st.session_state.vocab.pop(idx)
+                            save_data(st.session_state.vocab)
+                            st.rerun()
