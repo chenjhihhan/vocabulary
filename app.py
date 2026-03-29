@@ -11,6 +11,19 @@ st.title("📖 我的隨身單字本")
 DB_FILE = "vocab.json"
 WORD_TYPES = ["名詞", "動詞", "形容詞", "副詞", "片語", "代名詞", "介系詞", "連接詞", "感嘆詞"]
 
+# 中文詞性 -> 英文縮寫
+TYPE_MAP = {
+    "名詞": "n.",
+    "動詞": "v.",
+    "形容詞": "adj.",
+    "副詞": "adv.",
+    "片語": "phr.",
+    "代名詞": "pron.",
+    "介系詞": "prep.",
+    "連接詞": "conj.",
+    "感嘆詞": "interj."
+}
+
 
 # --- 資料處理函數 ---
 def load_data():
@@ -20,12 +33,14 @@ def load_data():
 
             converted = []
             for item in data:
+                # 相容舊資料：如果以前是純字串
                 if isinstance(item, str):
                     converted.append({
                         "english": item.strip(),
                         "chinese": "",
                         "type": ""
                     })
+                # 相容舊資料：如果以前是 dict，但可能缺少欄位
                 elif isinstance(item, dict):
                     converted.append({
                         "english": item.get("english", "").strip(),
@@ -37,18 +52,25 @@ def load_data():
 
 
 def save_data(data):
+    # 存檔前依英文排序（不分大小寫）
     data.sort(key=lambda x: x["english"].lower())
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def get_group_key(word):
+    """依英文首字母分組，非 A-Z 的歸類到 #"""
     if not word:
         return "#"
     first_char = word[0].upper()
     if first_char in string.ascii_uppercase:
         return first_char
     return "#"
+
+
+def get_display_type(word_type):
+    """把中文詞性轉成英文縮寫"""
+    return TYPE_MAP.get(word_type, word_type)
 
 
 # --- 初始化資料 ---
@@ -89,12 +111,14 @@ with st.container():
                         "type": word_type
                     })
                     save_data(st.session_state.vocab)
-                    st.success(f"成功加入：{english} / {word_type} / {chinese}")
+                    st.success(
+                        f"成功加入：{english} / {get_display_type(word_type)} / {chinese}"
+                    )
                     st.rerun()
 
 st.divider()
 
-# --- 顯示單字區 ---
+# --- 顯示與編輯單字區 ---
 st.subheader(f"目前單字庫（{len(st.session_state.vocab)}）")
 
 if not st.session_state.vocab:
@@ -102,11 +126,11 @@ if not st.session_state.vocab:
 else:
     grouped_vocab = {}
 
-    for item in st.session_state.vocab:
+    for idx, item in enumerate(st.session_state.vocab):
         group = get_group_key(item["english"])
         if group not in grouped_vocab:
             grouped_vocab[group] = []
-        grouped_vocab[group].append(item)
+        grouped_vocab[group].append((idx, item))
 
     group_order = list(string.ascii_uppercase) + ["#"]
 
@@ -114,14 +138,68 @@ else:
         if group in grouped_vocab:
             st.markdown(f"## {group}")
 
-            for i, item in enumerate(grouped_vocab[group]):
-                col1, col2 = st.columns([8, 1])
+            h1, h2, h3, h4, h5 = st.columns([3, 1.5, 3, 1, 1])
+            h1.markdown("**英文**")
+            h2.markdown("**詞性**")
+            h3.markdown("**中文**")
+            h4.markdown("**儲存**")
+            h5.markdown("**刪除**")
 
-                text = f"**{item['english']}**　{item.get('type', '')}　{item['chinese']}"
-                col1.write(text)
+            for idx, item in grouped_vocab[group]:
+                current_type = item.get("type", "")
+                current_type_index = WORD_TYPES.index(current_type) if current_type in WORD_TYPES else 0
 
-                unique_key = f"{group}_{item['english']}_{i}"
-                if col2.button("🗑️", key=unique_key):
-                    st.session_state.vocab.remove(item)
+                col1, col2, col3, col4, col5 = st.columns([3, 1.5, 3, 1, 1])
+
+                new_english = col1.text_input(
+                    "英文",
+                    value=item["english"],
+                    key=f"english_{idx}",
+                    label_visibility="collapsed"
+                ).strip()
+
+                selected_type = col2.selectbox(
+                    "詞性",
+                    options=WORD_TYPES,
+                    index=current_type_index,
+                    key=f"type_{idx}",
+                    label_visibility="collapsed",
+                    format_func=lambda x: get_display_type(x)
+                )
+
+                new_chinese = col3.text_input(
+                    "中文",
+                    value=item["chinese"],
+                    key=f"chinese_{idx}",
+                    label_visibility="collapsed"
+                ).strip()
+
+                if col4.button("💾", key=f"save_{idx}"):
+                    if not new_english:
+                        st.error("英文單字不能空白")
+                    elif not new_chinese:
+                        st.error("中文意思不能空白")
+                    else:
+                        duplicate = any(
+                            i != idx and vocab_item["english"].lower() == new_english.lower()
+                            for i, vocab_item in enumerate(st.session_state.vocab)
+                        )
+
+                        if duplicate:
+                            st.warning(f"單字 {new_english} 已經存在，不能重複")
+                        else:
+                            st.session_state.vocab[idx] = {
+                                "english": new_english,
+                                "type": selected_type,
+                                "chinese": new_chinese
+                            }
+                            save_data(st.session_state.vocab)
+                            st.success(
+                                f"已更新：{new_english} / {get_display_type(selected_type)} / {new_chinese}"
+                            )
+                            st.rerun()
+
+                if col5.button("🗑️", key=f"delete_{idx}"):
+                    st.session_state.vocab.pop(idx)
                     save_data(st.session_state.vocab)
                     st.rerun()
