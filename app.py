@@ -2,42 +2,11 @@ import streamlit as st
 import json
 import os
 import string
+import pandas as pd
 
 # --- 設定頁面 ---
 st.set_page_config(page_title="我的雲端單字本", page_icon="📖")
 st.title("📖 我的隨身單字本")
-
-# --- CSS 微調 ---
-st.markdown("""
-<style>
-/* 讓每一筆單字像卡片 */
-.vocab-card {
-    padding: 0.45rem 0.2rem 0.25rem 0.2rem;
-    border-bottom: 1px solid rgba(120,120,120,0.18);
-}
-
-/* 單字文字樣式 */
-.vocab-line {
-    font-size: 1.05rem;
-    line-height: 1.8;
-    word-break: break-word;
-}
-
-/* 讓按鈕縮小 */
-div[data-testid="stButton"] button {
-    padding: 0.25rem 0.45rem !important;
-    min-height: 2.2rem !important;
-    border-radius: 10px !important;
-    font-size: 1rem !important;
-}
-
-/* 讓對話框裡的按鈕正常大一點 */
-div[data-testid="stDialog"] div[data-testid="stButton"] button {
-    width: 100%;
-    min-height: 2.5rem !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # --- 資料設定 ---
 DB_FILE = "vocab.json"
@@ -54,6 +23,8 @@ TYPE_MAP = {
     "連接詞": "conj.",
     "感嘆詞": "interj."
 }
+
+REVERSE_TYPE_MAP = {v: k for k, v in TYPE_MAP.items()}
 
 
 # --- 資料處理函數 ---
@@ -90,62 +61,67 @@ def get_group_key(word):
     if not word:
         return "#"
     first_char = word[0].upper()
-    if first_char in string.ascii_uppercase:
-        return first_char
-    return "#"
+    return first_char if first_char in string.ascii_uppercase else "#"
 
 
 def get_display_type(word_type):
     return TYPE_MAP.get(word_type, word_type)
 
 
+def to_editor_df(vocab_list):
+    rows = []
+    for item in vocab_list:
+        rows.append({
+            "刪除": False,
+            "英文": item.get("english", ""),
+            "詞性": get_display_type(item.get("type", "")),
+            "中文": item.get("chinese", "")
+        })
+    return pd.DataFrame(rows)
+
+
+def from_editor_df(df):
+    records = []
+    for _, row in df.iterrows():
+        english = str(row["英文"]).strip()
+        chinese = str(row["中文"]).strip()
+        type_display = str(row["詞性"]).strip()
+
+        if not english:
+            continue
+
+        records.append({
+            "english": english,
+            "chinese": chinese,
+            "type": REVERSE_TYPE_MAP.get(type_display, "")
+        })
+    return records
+
+
+def validate_vocab(data):
+    seen = set()
+    for item in data:
+        english = item["english"].strip()
+        chinese = item["chinese"].strip()
+        word_type = item["type"].strip()
+
+        if not english:
+            return False, "英文單字不能空白"
+        if not chinese:
+            return False, f"{english} 的中文意思不能空白"
+        if word_type not in WORD_TYPES:
+            return False, f"{english} 的詞性不正確"
+        key = english.lower()
+        if key in seen:
+            return False, f"英文單字 {english} 重複了"
+        seen.add(key)
+
+    return True, ""
+
+
 # --- 初始化資料 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = load_data()
-
-
-# --- 編輯視窗 ---
-@st.dialog("編輯單字")
-def edit_vocab_dialog(idx):
-    item = st.session_state.vocab[idx]
-
-    with st.form(f"edit_form_{idx}"):
-        new_english = st.text_input("英文單字", value=item["english"]).strip()
-        new_chinese = st.text_input("中文意思", value=item["chinese"]).strip()
-
-        current_type = item.get("type", "")
-        type_index = WORD_TYPES.index(current_type) if current_type in WORD_TYPES else 0
-
-        new_type = st.selectbox(
-            "詞性 / 類別",
-            options=WORD_TYPES,
-            index=type_index,
-            format_func=lambda x: get_display_type(x)
-        )
-
-        submitted = st.form_submit_button("儲存修改", use_container_width=True)
-
-        if submitted:
-            if not new_english:
-                st.error("請輸入英文單字")
-            elif not new_chinese:
-                st.error("請輸入中文意思")
-            else:
-                duplicate = any(
-                    i != idx and vocab_item["english"].lower() == new_english.lower()
-                    for i, vocab_item in enumerate(st.session_state.vocab)
-                )
-
-                if duplicate:
-                    st.warning(f"單字 {new_english} 已經存在，不能重複")
-                else:
-                    st.session_state.vocab[idx] = {
-                        "english": new_english,
-                        "chinese": new_chinese,
-                        "type": new_type
-                    }
-                    save_data(st.session_state.vocab)
-                    st.rerun()
 
 
 # --- 新增單字區 ---
@@ -189,17 +165,16 @@ with st.container():
 
 st.divider()
 
-# --- 顯示單字區 ---
+# --- 顯示單字庫 ---
 st.subheader(f"目前單字庫（{len(st.session_state.vocab)}）", anchor=False)
 
 if not st.session_state.vocab:
     st.info("目前還沒有單字，快去新增一個吧！")
 else:
     grouped_vocab = {}
-
-    for idx, item in enumerate(st.session_state.vocab):
+    for item in st.session_state.vocab:
         group = get_group_key(item["english"])
-        grouped_vocab.setdefault(group, []).append((idx, item))
+        grouped_vocab.setdefault(group, []).append(item)
 
     group_order = list(string.ascii_uppercase) + ["#"]
 
@@ -207,28 +182,79 @@ else:
         if group in grouped_vocab:
             st.subheader(group, anchor=False)
 
-            for idx, item in grouped_vocab[group]:
-                display_type = get_display_type(item.get("type", ""))
+            group_data = grouped_vocab[group]
+            editor_df = to_editor_df(group_data)
 
-                with st.container():
-                    st.markdown("<div class='vocab-card'>", unsafe_allow_html=True)
+            edited_df = st.data_editor(
+                editor_df,
+                hide_index=True,
+                use_container_width=True,
+                num_rows="fixed",
+                key=f"editor_{group}",
+                column_config={
+                    "刪除": st.column_config.CheckboxColumn(
+                        "刪除",
+                        help="勾選後可刪除"
+                    ),
+                    "英文": st.column_config.TextColumn(
+                        "英文",
+                        required=True
+                    ),
+                    "詞性": st.column_config.SelectboxColumn(
+                        "詞性",
+                        options=list(TYPE_MAP.values()),
+                        required=True
+                    ),
+                    "中文": st.column_config.TextColumn(
+                        "中文",
+                        required=True
+                    ),
+                },
+                disabled=[]
+            )
 
-                    row1, row2, row3 = st.columns([7.2, 0.9, 0.9], gap="small")
+            col1, col2 = st.columns(2)
 
-                    with row1:
-                        st.markdown(
-                            f"<div class='vocab-line'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
-                            unsafe_allow_html=True
-                        )
+            with col1:
+                if st.button(f"💾 儲存 {group} 區", key=f"save_{group}", use_container_width=True):
+                    new_group_data = from_editor_df(edited_df)
 
-                    with row2:
-                        if st.button("✏️", key=f"edit_{idx}"):
-                            edit_vocab_dialog(idx)
+                    valid, message = validate_vocab(new_group_data)
+                    if not valid:
+                        st.error(message)
+                    else:
+                        other_data = [
+                            item for item in st.session_state.vocab
+                            if get_group_key(item["english"]) != group
+                        ]
 
-                    with row3:
-                        if st.button("🗑️", key=f"delete_{idx}"):
-                            st.session_state.vocab.pop(idx)
+                        merged_data = other_data + new_group_data
+                        valid_all, message_all = validate_vocab(merged_data)
+
+                        if not valid_all:
+                            st.error(message_all)
+                        else:
+                            st.session_state.vocab = merged_data
                             save_data(st.session_state.vocab)
+                            st.success(f"{group} 區已儲存")
                             st.rerun()
 
-                    st.markdown("</div>", unsafe_allow_html=True)
+            with col2:
+                if st.button(f"🗑️ 刪除勾選的 {group}", key=f"delete_{group}", use_container_width=True):
+                    remaining_df = edited_df[edited_df["刪除"] == False].copy()
+                    remaining_df["刪除"] = False
+
+                    new_group_data = from_editor_df(remaining_df)
+
+                    valid, message = validate_vocab(new_group_data)
+                    if not valid:
+                        st.error(message)
+                    else:
+                        other_data = [
+                            item for item in st.session_state.vocab
+                            if get_group_key(item["english"]) != group
+                        ]
+                        st.session_state.vocab = other_data + new_group_data
+                        save_data(st.session_state.vocab)
+                        st.success(f"已刪除 {group} 區勾選的單字")
+                        st.rerun()
