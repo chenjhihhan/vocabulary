@@ -20,14 +20,12 @@ def load_data():
 
             converted = []
             for item in data:
-                # 相容舊資料：如果以前是純字串
                 if isinstance(item, str):
                     converted.append({
                         "english": item.strip(),
                         "chinese": "",
                         "type": ""
                     })
-                # 相容舊資料：如果以前是 dict，但可能缺少欄位
                 elif isinstance(item, dict):
                     converted.append({
                         "english": item.get("english", "").strip(),
@@ -39,14 +37,12 @@ def load_data():
 
 
 def save_data(data):
-    # 存檔前依英文排序（不分大小寫）
     data.sort(key=lambda x: x["english"].lower())
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def get_group_key(word):
-    """依英文首字母分組，非 A-Z 的歸類到 #"""
     if not word:
         return "#"
     first_char = word[0].upper()
@@ -65,8 +61,8 @@ with st.container():
     st.subheader("新增單字")
 
     with st.form("add_vocab_form", clear_on_submit=True):
-        english = st.text_input("英文單字", placeholder="例如: apple").strip()
-        chinese = st.text_input("中文意思", placeholder="例如: 蘋果").strip()
+        english = st.text_input("英文單字", placeholder="例如: irresistible").strip()
+        chinese = st.text_input("中文意思", placeholder="例如: 誘人的").strip()
         word_type = st.selectbox("詞性 / 類別", ["請選擇"] + WORD_TYPES)
 
         submitted = st.form_submit_button("➕ 新增到清單", use_container_width=True)
@@ -79,7 +75,6 @@ with st.container():
             elif word_type == "請選擇":
                 st.error("請選擇詞性 / 類別")
             else:
-                # 檢查是否重複（英文不分大小寫）
                 exists = any(
                     item["english"].lower() == english.lower()
                     for item in st.session_state.vocab
@@ -94,7 +89,7 @@ with st.container():
                         "type": word_type
                     })
                     save_data(st.session_state.vocab)
-                    st.success(f"成功加入：{english} / {chinese} / {word_type}")
+                    st.success(f"成功加入：{english} / {word_type} / {chinese}")
                     st.rerun()
 
 st.divider()
@@ -119,20 +114,14 @@ else:
         if group in grouped_vocab:
             st.markdown(f"## {group}")
 
-            header1, header2, header3, header4 = st.columns([3, 3, 2, 1])
-            header1.markdown("**英文**")
-            header2.markdown("**中文**")
-            header3.markdown("**詞性 / 類別**")
-            header4.markdown("**操作**")
-
             for i, item in enumerate(grouped_vocab[group]):
-                col1, col2, col3, col4 = st.columns([3, 3, 2, 1])
-                col1.write(item["english"])
-                col2.write(item["chinese"])
-                col3.write(item.get("type", ""))
+                col1, col2 = st.columns([8, 1])
+
+                text = f"**{item['english']}**　{item.get('type', '')}　{item['chinese']}"
+                col1.write(text)
 
                 unique_key = f"{group}_{item['english']}_{i}"
-                if col4.button("🗑️", key=unique_key):
+                if col2.button("🗑️", key=unique_key):
                     st.session_state.vocab.remove(item)
                     save_data(st.session_state.vocab)
                     st.rerun()
