@@ -7,18 +7,34 @@ import string
 st.set_page_config(page_title="我的雲端單字本", page_icon="📖")
 st.title("📖 我的隨身單字本")
 
-# --- 手機版樣式微調 ---
+# --- CSS 微調 ---
 st.markdown("""
 <style>
-div[data-testid="stButton"] button {
-    padding: 0.35rem 0.55rem;
-    border-radius: 10px;
-    font-size: 1rem;
+/* 讓每一筆單字像卡片 */
+.vocab-card {
+    padding: 0.45rem 0.2rem 0.25rem 0.2rem;
+    border-bottom: 1px solid rgba(120,120,120,0.18);
 }
-.word-row {
-    font-size: 1.1rem;
-    line-height: 2.2;
+
+/* 單字文字樣式 */
+.vocab-line {
+    font-size: 1.05rem;
+    line-height: 1.8;
     word-break: break-word;
+}
+
+/* 讓按鈕縮小 */
+div[data-testid="stButton"] button {
+    padding: 0.25rem 0.45rem !important;
+    min-height: 2.2rem !important;
+    border-radius: 10px !important;
+    font-size: 1rem !important;
+}
+
+/* 讓對話框裡的按鈕正常大一點 */
+div[data-testid="stDialog"] div[data-testid="stButton"] button {
+    width: 100%;
+    min-height: 2.5rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -194,20 +210,25 @@ else:
             for idx, item in grouped_vocab[group]:
                 display_type = get_display_type(item.get("type", ""))
 
-                text_col, edit_col, del_col = st.columns([7.5, 1, 1], gap="small")
+                with st.container():
+                    st.markdown("<div class='vocab-card'>", unsafe_allow_html=True)
 
-                with text_col:
-                    st.markdown(
-                        f"<div class='word-row'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
-                        unsafe_allow_html=True
-                    )
+                    row1, row2, row3 = st.columns([7.2, 0.9, 0.9], gap="small")
 
-                with edit_col:
-                    if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
-                        edit_vocab_dialog(idx)
+                    with row1:
+                        st.markdown(
+                            f"<div class='vocab-line'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
+                            unsafe_allow_html=True
+                        )
 
-                with del_col:
-                    if st.button("🗑️", key=f"delete_{idx}", use_container_width=True):
-                        st.session_state.vocab.pop(idx)
-                        save_data(st.session_state.vocab)
-                        st.rerun()
+                    with row2:
+                        if st.button("✏️", key=f"edit_{idx}"):
+                            edit_vocab_dialog(idx)
+
+                    with row3:
+                        if st.button("🗑️", key=f"delete_{idx}"):
+                            st.session_state.vocab.pop(idx)
+                            save_data(st.session_state.vocab)
+                            st.rerun()
+
+                    st.markdown("</div>", unsafe_allow_html=True)
