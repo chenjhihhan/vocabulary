@@ -33,14 +33,12 @@ def load_data():
 
             converted = []
             for item in data:
-                # 相容舊資料：如果以前是純字串
                 if isinstance(item, str):
                     converted.append({
                         "english": item.strip(),
                         "chinese": "",
                         "type": ""
                     })
-                # 相容舊資料：如果以前是 dict，但可能缺少欄位
                 elif isinstance(item, dict):
                     converted.append({
                         "english": item.get("english", "").strip(),
@@ -52,14 +50,12 @@ def load_data():
 
 
 def save_data(data):
-    # 存檔前依英文排序（不分大小寫）
     data.sort(key=lambda x: x["english"].lower())
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def get_group_key(word):
-    """依英文首字母分組，非 A-Z 的歸類到 #"""
     if not word:
         return "#"
     first_char = word[0].upper()
@@ -69,13 +65,69 @@ def get_group_key(word):
 
 
 def get_display_type(word_type):
-    """把中文詞性轉成英文縮寫"""
     return TYPE_MAP.get(word_type, word_type)
 
 
 # --- 初始化資料 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = load_data()
+
+
+# --- 編輯視窗 ---
+@st.dialog("編輯單字")
+def edit_vocab_dialog(idx):
+    item = st.session_state.vocab[idx]
+
+    with st.form(f"edit_form_{idx}"):
+        new_english = st.text_input(
+            "英文單字",
+            value=item["english"]
+        ).strip()
+
+        current_type = item.get("type", "")
+        if current_type in WORD_TYPES:
+            type_index = WORD_TYPES.index(current_type)
+        else:
+            type_index = 0
+
+        new_type = st.selectbox(
+            "詞性 / 類別",
+            options=WORD_TYPES,
+            index=type_index,
+            format_func=lambda x: get_display_type(x)
+        )
+
+        new_chinese = st.text_input(
+            "中文意思",
+            value=item["chinese"]
+        ).strip()
+
+        submitted = st.form_submit_button("儲存修改", use_container_width=True)
+
+        if submitted:
+            if not new_english:
+                st.error("請輸入英文單字")
+            elif not new_chinese:
+                st.error("請輸入中文意思")
+            else:
+                duplicate = any(
+                    i != idx and vocab_item["english"].lower() == new_english.lower()
+                    for i, vocab_item in enumerate(st.session_state.vocab)
+                )
+
+                if duplicate:
+                    st.warning(f"單字 {new_english} 已經存在，不能重複")
+                else:
+                    st.session_state.vocab[idx] = {
+                        "english": new_english,
+                        "chinese": new_chinese,
+                        "type": new_type
+                    }
+                    save_data(st.session_state.vocab)
+                    st.success(
+                        f"已更新：{new_english} / {get_display_type(new_type)} / {new_chinese}"
+                    )
+                    st.rerun()
 
 
 # --- 新增單字區 ---
@@ -85,7 +137,11 @@ with st.container():
     with st.form("add_vocab_form", clear_on_submit=True):
         english = st.text_input("英文單字", placeholder="例如: irresistible").strip()
         chinese = st.text_input("中文意思", placeholder="例如: 誘人的").strip()
-        word_type = st.selectbox("詞性 / 類別", ["請選擇"] + WORD_TYPES)
+        word_type = st.selectbox(
+            "詞性 / 類別",
+            ["請選擇"] + WORD_TYPES,
+            format_func=lambda x: x if x == "請選擇" else get_display_type(x)
+        )
 
         submitted = st.form_submit_button("➕ 新增到清單", use_container_width=True)
 
@@ -118,7 +174,7 @@ with st.container():
 
 st.divider()
 
-# --- 顯示與編輯單字區 ---
+# --- 顯示單字區 ---
 st.subheader(f"目前單字庫（{len(st.session_state.vocab)}）")
 
 if not st.session_state.vocab:
@@ -138,68 +194,16 @@ else:
         if group in grouped_vocab:
             st.markdown(f"## {group}")
 
-            h1, h2, h3, h4, h5 = st.columns([3, 1.5, 3, 1, 1])
-            h1.markdown("**英文**")
-            h2.markdown("**詞性**")
-            h3.markdown("**中文**")
-            h4.markdown("**儲存**")
-            h5.markdown("**刪除**")
-
             for idx, item in grouped_vocab[group]:
-                current_type = item.get("type", "")
-                current_type_index = WORD_TYPES.index(current_type) if current_type in WORD_TYPES else 0
+                col1, col2, col3 = st.columns([8, 1, 1])
 
-                col1, col2, col3, col4, col5 = st.columns([3, 1.5, 3, 1, 1])
+                display_text = f"**{item['english']}** ｜ {get_display_type(item.get('type', ''))} ｜ {item['chinese']}"
+                col1.write(display_text)
 
-                new_english = col1.text_input(
-                    "英文",
-                    value=item["english"],
-                    key=f"english_{idx}",
-                    label_visibility="collapsed"
-                ).strip()
+                if col2.button("✏️", key=f"edit_{idx}"):
+                    edit_vocab_dialog(idx)
 
-                selected_type = col2.selectbox(
-                    "詞性",
-                    options=WORD_TYPES,
-                    index=current_type_index,
-                    key=f"type_{idx}",
-                    label_visibility="collapsed",
-                    format_func=lambda x: get_display_type(x)
-                )
-
-                new_chinese = col3.text_input(
-                    "中文",
-                    value=item["chinese"],
-                    key=f"chinese_{idx}",
-                    label_visibility="collapsed"
-                ).strip()
-
-                if col4.button("💾", key=f"save_{idx}"):
-                    if not new_english:
-                        st.error("英文單字不能空白")
-                    elif not new_chinese:
-                        st.error("中文意思不能空白")
-                    else:
-                        duplicate = any(
-                            i != idx and vocab_item["english"].lower() == new_english.lower()
-                            for i, vocab_item in enumerate(st.session_state.vocab)
-                        )
-
-                        if duplicate:
-                            st.warning(f"單字 {new_english} 已經存在，不能重複")
-                        else:
-                            st.session_state.vocab[idx] = {
-                                "english": new_english,
-                                "type": selected_type,
-                                "chinese": new_chinese
-                            }
-                            save_data(st.session_state.vocab)
-                            st.success(
-                                f"已更新：{new_english} / {get_display_type(selected_type)} / {new_chinese}"
-                            )
-                            st.rerun()
-
-                if col5.button("🗑️", key=f"delete_{idx}"):
+                if col3.button("🗑️", key=f"delete_{idx}"):
                     st.session_state.vocab.pop(idx)
                     save_data(st.session_state.vocab)
                     st.rerun()
