@@ -3,7 +3,6 @@ import json
 import os
 import string
 
-# --- 設定頁面 ---
 st.set_page_config(page_title="我的雲端單字本", page_icon="📖")
 st.title("📖 我的隨身單字本")
 
