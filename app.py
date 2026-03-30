@@ -14,8 +14,10 @@ st.markdown("""
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
-    gap: 0.4rem !important;
+    gap: 0.45rem !important;
     width: 100% !important;
+    border-bottom: 1px solid #eeeeee !important;
+    padding: 0.45rem 0 !important;
 }
 
 /* 文字區撐滿 */
@@ -24,12 +26,12 @@ st.markdown("""
     min-width: 0 !important;
 }
 
-/* 讓 markdown / write 的段落不要多出上下空間 */
+/* 避免 markdown / write 產生多餘空白 */
 [class*="st-key-vocab_row_"] p {
     margin: 0 !important;
 }
 
-/* 按鈕區固定小尺寸 */
+/* 按鈕固定小尺寸 */
 [class*="st-key-vocab_row_"] button {
     min-width: 2.2rem !important;
     width: 2.2rem !important;
@@ -39,13 +41,28 @@ st.markdown("""
     font-size: 0.95rem !important;
 }
 
-/* 手機上字稍微縮一點 */
+/* 單字文字樣式 */
 .word-line {
     font-size: 1rem;
-    line-height: 1.4;
+    line-height: 1.45;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* 英文單字顏色 */
+.word-line .english-word {
+    color: #2c7be5;
+    font-weight: 700;
+}
+
+/* 刪除確認框 */
+.delete-box {
+    background: #fff8f8;
+    border: 1px solid #f3caca;
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+    margin: 0.35rem 0 0.7rem 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -214,7 +231,12 @@ else:
 
                 with st.container(key=f"vocab_row_{idx}", horizontal=True):
                     st.markdown(
-                        f"<div class='word-line'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
+                        f"""
+                        <div class='word-line'>
+                            <span class='english-word'>{item['english']}</span>
+                            ｜ {display_type} ｜ {item['chinese']}
+                        </div>
+                        """,
                         unsafe_allow_html=True
                     )
 
@@ -222,6 +244,22 @@ else:
                         edit_vocab_dialog(idx)
 
                     if st.button("🗑️", key=f"delete_{idx}", type="tertiary"):
-                        st.session_state.vocab.pop(idx)
-                        save_data(st.session_state.vocab)
-                        st.rerun()
+                        st.session_state[f"confirm_delete_{idx}"] = True
+
+                # --- 刪除二次確認 ---
+                if st.session_state.get(f"confirm_delete_{idx}", False):
+                    st.markdown("<div class='delete-box'>確定要刪除這個單字嗎？</div>", unsafe_allow_html=True)
+
+                    confirm_col, cancel_col = st.columns(2)
+
+                    with confirm_col:
+                        if st.button("確認刪除", key=f"confirm_delete_btn_{idx}", use_container_width=True):
+                            st.session_state.vocab.pop(idx)
+                            save_data(st.session_state.vocab)
+                            st.session_state.pop(f"confirm_delete_{idx}", None)
+                            st.rerun()
+
+                    with cancel_col:
+                        if st.button("取消", key=f"cancel_delete_btn_{idx}", use_container_width=True):
+                            st.session_state.pop(f"confirm_delete_{idx}", None)
+                            st.rerun()
