@@ -10,16 +10,20 @@ st.title("📖 我的隨身單字本")
 st.markdown("""
 <style>
 .word-text {
-    font-size: 1.1rem;
-    line-height: 2.1;
+    font-size: 1.05rem;
+    line-height: 2.2rem;
     word-break: break-word;
+    display: flex;
+    align-items: center;
+    min-height: 2.2rem;
 }
 
 div[data-testid="stButton"] button {
-    padding: 0.3rem 0.55rem !important;
-    border-radius: 10px !important;
-    min-height: 2.2rem !important;
-    font-size: 1rem !important;
+    padding: 0.1rem 0.35rem !important;
+    border-radius: 8px !important;
+    min-height: 2rem !important;
+    height: 2rem !important;
+    font-size: 0.85rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -39,7 +43,6 @@ TYPE_MAP = {
     "連接詞": "conj.",
     "感嘆詞": "interj."
 }
-
 
 # --- 資料處理函數 ---
 def load_data():
@@ -81,11 +84,9 @@ def get_group_key(word):
 def get_display_type(word_type):
     return TYPE_MAP.get(word_type, word_type)
 
-
 # --- 初始化資料 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = load_data()
-
 
 # --- 編輯視窗 ---
 @st.dialog("編輯單字")
@@ -129,7 +130,6 @@ def edit_vocab_dialog(idx):
                     }
                     save_data(st.session_state.vocab)
                     st.rerun()
-
 
 # --- 新增單字區 ---
 with st.container():
@@ -193,23 +193,20 @@ else:
             for idx, item in grouped_vocab[group]:
                 display_type = get_display_type(item.get("type", ""))
 
-                row_col, action_col = st.columns([7.5, 2.5], gap="small")
-                
-                with row_col:
+                text_col, edit_col, delete_col = st.columns([8.5, 1, 1], gap="small")
+
+                with text_col:
                     st.markdown(
                         f"<div class='word-text'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
                         unsafe_allow_html=True
                     )
-                
-                with action_col:
-                    edit_col, delete_col = st.columns(2, gap="small")
-                
-                    with edit_col:
-                        if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
-                            edit_vocab_dialog(idx)
-                
-                    with delete_col:
-                        if st.button("🗑️", key=f"delete_{idx}", use_container_width=True):
-                            st.session_state.vocab.pop(idx)
-                            save_data(st.session_state.vocab)
-                            st.rerun()
+
+                with edit_col:
+                    if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
+                        edit_vocab_dialog(idx)
+
+                with delete_col:
+                    if st.button("🗑️", key=f"delete_{idx}", use_container_width=True):
+                        st.session_state.vocab.pop(idx)
+                        save_data(st.session_state.vocab)
+                        st.rerun()
