@@ -9,15 +9,6 @@ st.title("📖 我的隨身單字本")
 # --- CSS 微調 ---
 st.markdown("""
 <style>
-.word-text {
-    font-size: 1.05rem;
-    line-height: 2.2rem;
-    word-break: break-word;
-    display: flex;
-    align-items: center;
-    min-height: 2.2rem;
-}
-
 div[data-testid="stButton"] button {
     padding: 0.1rem 0.35rem !important;
     border-radius: 8px !important;
@@ -67,19 +58,16 @@ def load_data():
         return converted
     return []
 
-
 def save_data(data):
     data.sort(key=lambda x: x["english"].lower())
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-
 
 def get_group_key(word):
     if not word:
         return "#"
     first_char = word[0].upper()
     return first_char if first_char in string.ascii_uppercase else "#"
-
 
 def get_display_type(word_type):
     return TYPE_MAP.get(word_type, word_type)
@@ -193,19 +181,16 @@ else:
             for idx, item in grouped_vocab[group]:
                 display_type = get_display_type(item.get("type", ""))
 
-                text_col, edit_col, delete_col = st.columns([8.5, 1, 1], gap="small")
+                col1, col2, col3 = st.columns([8, 1, 1], vertical_alignment="center")
 
-                with text_col:
-                    st.markdown(
-                        f"<div class='word-text'><strong>{item['english']}</strong> ｜ {display_type} ｜ {item['chinese']}</div>",
-                        unsafe_allow_html=True
-                    )
+                with col1:
+                    st.write(f"**{item['english']}** ｜ {display_type} ｜ {item['chinese']}")
 
-                with edit_col:
+                with col2:
                     if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
                         edit_vocab_dialog(idx)
 
-                with delete_col:
+                with col3:
                     if st.button("🗑️", key=f"delete_{idx}", use_container_width=True):
                         st.session_state.vocab.pop(idx)
                         save_data(st.session_state.vocab)
