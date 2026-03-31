@@ -147,8 +147,13 @@ def edit_vocab_dialog(item):
     row_id = item["id"]
 
     with st.form(f"edit_form_{row_id}"):
-        new_english = st.text_input("英文單字", value=item["english"]).strip()
-        new_chinese = st.text_input("中文意思", value=item["chinese"]).strip()
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            new_english = st.text_input("英文單字", value=item["english"]).strip()
+    
+        with col2:
+            new_chinese = st.text_input("中文意思", value=item["chinese"]).strip()
 
         current_type = item.get("type", "")
         type_index = WORD_TYPES.index(current_type) if current_type in WORD_TYPES else 0
@@ -179,8 +184,14 @@ with st.container():
     st.subheader("新增單字", anchor=False)
 
     with st.form("add_vocab_form", clear_on_submit=True):
-        english = st.text_input("英文單字", placeholder="例如: irresistible").strip()
-        chinese = st.text_input("中文意思", placeholder="例如: 誘人的").strip()
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            english = st.text_input("英文單字", placeholder="例如: irresistible").strip()
+    
+        with col2:
+            chinese = st.text_input("中文意思", placeholder="例如: 誘人的").strip()
+    
         word_type = st.selectbox(
             "詞性 / 類別",
             ["請選擇"] + WORD_TYPES,
