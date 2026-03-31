@@ -94,40 +94,66 @@ def get_display_type(word_type):
     return TYPE_MAP.get(word_type, word_type)
 
 def load_data():
-    response = (
-        supabase.table("vocab")
-        .select("id, english, chinese, type")
-        .order("english")
-        .execute()
-    )
-    return response.data or []
+    try:
+        response = (
+            supabase.table("vocab")
+            .select("id, english, chinese, type")
+            .order("english")
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        st.error(f"讀取資料失敗：{e}")
+        return []
 
 def insert_word(english, chinese, word_type):
-    supabase.table("vocab").insert({
-        "english": english.strip(),
-        "chinese": chinese.strip(),
-        "type": word_type.strip()
-    }).execute()
+    try:
+        return supabase.table("vocab").insert({
+            "english": english.strip(),
+            "chinese": chinese.strip(),
+            "type": word_type.strip()
+        }).execute()
+    except Exception as e:
+        st.error(f"新增失敗：{e}")
+        return None
 
 def update_word(row_id, english, chinese, word_type):
-    supabase.table("vocab").update({
-        "english": english.strip(),
-        "chinese": chinese.strip(),
-        "type": word_type.strip()
-    }).eq("id", row_id).execute()
+    try:
+        return supabase.table("vocab").update({
+            "english": english.strip(),
+            "chinese": chinese.strip(),
+            "type": word_type.strip()
+        }).eq("id", row_id).execute()
+    except Exception as e:
+        st.error(f"更新失敗：{e}")
+        return None
 
 def delete_word(row_id):
-    supabase.table("vocab").delete().eq("id", row_id).execute()
+    try:
+        return supabase.table("vocab").delete().eq("id", row_id).execute()
+    except Exception as e:
+        st.error(f"刪除失敗：{e}")
+        return None
 
 def english_exists(english, exclude_id=None):
-    rows = (
-        supabase.table("vocab")
-        .select("id, english")
-        .ilike("english", english.strip())
-        .execute()
-        .data
-        or []
-    )
+    target = english.strip().lower()
+
+    try:
+        rows = (
+            supabase.table("vocab")
+            .select("id, english")
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        st.error(f"檢查單字是否重複時失敗：{e}")
+        return False
+
+    rows = [
+        r for r in rows
+        if r.get("english", "").strip().lower() == target
+    ]
 
     if exclude_id is not None:
         rows = [r for r in rows if r["id"] != exclude_id]
@@ -148,10 +174,10 @@ def edit_vocab_dialog(item):
 
     with st.form(f"edit_form_{row_id}"):
         col1, col2 = st.columns(2)
-    
+
         with col1:
             new_english = st.text_input("英文單字", value=item["english"]).strip()
-    
+
         with col2:
             new_chinese = st.text_input("中文意思", value=item["chinese"]).strip()
 
@@ -175,9 +201,10 @@ def edit_vocab_dialog(item):
             elif english_exists(new_english, exclude_id=row_id):
                 st.warning(f"單字 {new_english} 已經存在，不能重複")
             else:
-                update_word(row_id, new_english, new_chinese, new_type)
-                refresh_data()
-                st.rerun()
+                result = update_word(row_id, new_english, new_chinese, new_type)
+                if result is not None:
+                    refresh_data()
+                    st.rerun()
 
 # --- 新增單字區 ---
 with st.container():
@@ -185,13 +212,13 @@ with st.container():
 
     with st.form("add_vocab_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-    
+
         with col1:
             english = st.text_input("英文單字", placeholder="例如: irresistible").strip()
-    
+
         with col2:
             chinese = st.text_input("中文意思", placeholder="例如: 誘人的").strip()
-    
+
         word_type = st.selectbox(
             "詞性 / 類別",
             ["請選擇"] + WORD_TYPES,
@@ -210,9 +237,10 @@ with st.container():
             elif english_exists(english):
                 st.warning("這個英文單字已經在清單中囉！")
             else:
-                insert_word(english, chinese, word_type)
-                refresh_data()
-                st.rerun()
+                result = insert_word(english, chinese, word_type)
+                if result is not None:
+                    refresh_data()
+                    st.rerun()
 
 st.divider()
 
@@ -267,10 +295,11 @@ else:
 
                     with confirm_col:
                         if st.button("確認刪除", key=f"confirm_delete_btn_{row_id}", use_container_width=True):
-                            delete_word(row_id)
-                            st.session_state.pop(f"confirm_delete_{row_id}", None)
-                            refresh_data()
-                            st.rerun()
+                            result = delete_word(row_id)
+                            if result is not None:
+                                st.session_state.pop(f"confirm_delete_{row_id}", None)
+                                refresh_data()
+                                st.rerun()
 
                     with cancel_col:
                         if st.button("取消", key=f"cancel_delete_btn_{row_id}", use_container_width=True):
